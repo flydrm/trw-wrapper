@@ -15,6 +15,7 @@ import string
 import base64
 import hashlib
 import hmac
+import hmac
 from datetime import datetime
 
 class QuickProfessionalTest:
