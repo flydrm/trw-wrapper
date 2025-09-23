@@ -11,11 +11,11 @@
    - 兼容性验证
 
 📋 测试范围:
-   - GPT系列模型
-   - Claude系列模型
-   - Gemini系列模型
-   - 其他主流AI模型
-   - 自定义模型支持
+   - GPT系列模型 (7个)
+   - Claude系列模型 (6个)
+   - Gemini系列模型 (5个)
+   - 其他主流AI模型 (9个)
+   - 总计27个模型
 """
 
 import os
@@ -25,108 +25,23 @@ import time
 import requests
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+from ai_model_manager import AIModelManager
 
 class AIModelComprehensiveTester:
     """AI模型综合测试器"""
 
     def __init__(self):
         self.workspace_dir = '/workspace'
+        self.model_manager = AIModelManager()
         self.test_results = {
             'test_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'total_models': 0,
             'successful_tests': 0,
             'failed_tests': 0,
             'bypass_methods': [],
-            'model_results': {}
-        }
-
-        # 支持的AI模型配置
-        self.supported_models = {
-            'gpt_series': {
-                'models': [
-                    'gpt-3.5-turbo',
-                    'gpt-3.5-turbo-16k',
-                    'gpt-4',
-                    'gpt-4-turbo',
-                    'gpt-4-turbo-preview',
-                    'gpt-4-0125-preview',
-                    'gpt-4-1106-preview'
-                ],
-                'endpoints': [
-                    '/v1/chat/completions',
-                    '/api/chat',
-                    '/api/v1/chat/completions'
-                ],
-                'bypass_methods': [
-                    'token_reuse',
-                    'api_direct_access',
-                    'header_injection',
-                    'parameter_pollution'
-                ]
-            },
-            'claude_series': {
-                'models': [
-                    'claude-3-opus-20240229',
-                    'claude-3-sonnet-20240229',
-                    'claude-3-haiku-20240307',
-                    'claude-2.1',
-                    'claude-2.0',
-                    'claude-instant-1.2'
-                ],
-                'endpoints': [
-                    '/v1/chat/completions',
-                    '/api/messages',
-                    '/api/v1/messages'
-                ],
-                'bypass_methods': [
-                    'token_reuse',
-                    'api_direct_access',
-                    'header_injection'
-                ]
-            },
-            'gemini_series': {
-                'models': [
-                    'gemini-pro',
-                    'gemini-pro-vision',
-                    'gemini-1.5-pro',
-                    'gemini-1.5-flash',
-                    'gemini-1.0-pro'
-                ],
-                'endpoints': [
-                    '/v1/chat/completions',
-                    '/api/generate',
-                    '/api/v1/generate'
-                ],
-                'bypass_methods': [
-                    'token_reuse',
-                    'api_direct_access',
-                    'header_injection',
-                    'parameter_pollution'
-                ]
-            },
-            'other_models': {
-                'models': [
-                    'llama-2-70b-chat',
-                    'llama-2-13b-chat',
-                    'llama-2-7b-chat',
-                    'codellama-34b-instruct',
-                    'codellama-13b-instruct',
-                    'codellama-7b-instruct',
-                    'mistral-7b-instruct',
-                    'mistral-8x7b-instruct',
-                    'mixtral-8x7b-instruct'
-                ],
-                'endpoints': [
-                    '/v1/chat/completions',
-                    '/api/chat',
-                    '/api/v1/chat/completions',
-                    '/api/generate'
-                ],
-                'bypass_methods': [
-                    'token_reuse',
-                    'api_direct_access'
-                ]
-            }
+            'model_results': {},
+            'performance_results': {},
+            'risk_assessment': {}
         }
 
     def log_test(self, model_name, test_type, status, message=""):
@@ -152,13 +67,20 @@ class AIModelComprehensiveTester:
             self.test_results['failed_tests'] += 1
             print(f"❌ {model_name} - {test_type}: {message}")
 
-    def test_model_access(self, model_info):
-        """测试模型访问"""
-        model_name = model_info['name']
-        endpoint = model_info['endpoint']
+    def test_model_access_comprehensive(self, model_name):
+        """全面测试模型访问"""
+        print(f"\\n🔍 全面测试模型: {model_name}")
+        print('-' * 50)
 
-        print(f"\\n🔍 测试模型: {model_name}")
-        print(f"   端点: {endpoint}")
+        model_info = self.model_manager.get_model_info(model_name)
+        if not model_info:
+            self.log_test(model_name, '模型信息', 'FAILED', '模型信息不存在')
+            return False
+
+        print(f"   🤖 模型: {model_info.get('name', model_name)}")
+        print(f"   💰 成本: ${model_info.get('cost_per_1k_input', 0):.4f}/1K 输入")
+        print(f"   ⚠️  风险: {model_info.get('risk_level', 'unknown').upper()}")
+        print(f"   🔧 端点: {len(model_info.get('endpoints', []))} 个")
 
         # 测试用例
         test_cases = [
@@ -194,74 +116,83 @@ class AIModelComprehensiveTester:
             }
         ]
 
-        for test_case in test_cases:
-            self.test_model_endpoint(model_name, endpoint, test_case)
+        successful_tests = 0
+        total_tests = 0
 
-    def test_model_endpoint(self, model_name, endpoint, test_case):
+        for test_case in test_cases:
+            total_tests += 1
+            if self.test_model_endpoint(model_name, test_case):
+                successful_tests += 1
+
+        success_rate = (successful_tests / total_tests) * 100 if total_tests > 0 else 0
+        self.log_test(model_name, '综合访问测试', 'SUCCESS' if success_rate > 50 else 'FAILED',
+                     f'{successful_tests}/{total_tests} 通过 (成功率: {success_rate:.1f}%)')
+
+        return success_rate > 50
+
+    def test_model_endpoint(self, model_name, test_case):
         """测试模型端点"""
         base_url = 'https://iwoozie.baby'
+        model_info = self.model_manager.get_model_info(model_name)
 
-        # 构造请求头
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer cf-turnstile-response-token',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+        if not model_info:
+            return False
 
-        try:
-            # 尝试不同的请求方法
-            methods = ['POST', 'GET']
-            for method in methods:
-                try:
-                    url = f"{base_url}{endpoint}"
-                    payload = test_case['payload']
+        # 尝试所有端点
+        for endpoint in model_info['endpoints']:
+            try:
+                url = f"{base_url}{endpoint}"
+                headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer cf-turnstile-response-token',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
 
-                    if method == 'GET':
-                        # 转换为GET请求
-                        params = payload.copy()
-                        params['message'] = payload['messages'][0]['content']
-                        response = requests.get(url, headers=headers, params=params, timeout=10)
-                    else:
-                        response = requests.post(url, headers=headers, json=payload, timeout=10)
+                response = requests.post(url, headers=headers, json=test_case['payload'], timeout=15)
 
-                    if response.status_code == 200:
-                        self.log_test(model_name, test_case['name'], 'SUCCESS',
-                                    f"HTTP {method} 成功 - 状态码: {response.status_code}")
+                if response.status_code == 200:
+                    try:
+                        result = response.json()
+                        if 'choices' in result or 'content' in result or 'response' in result:
+                            return True
+                    except:
+                        # 响应成功但格式不同
                         return True
-                    elif response.status_code == 403:
-                        self.log_test(model_name, test_case['name'], 'PARTIAL',
-                                    f"HTTP {method} 403 Forbidden - 需要认证")
-                    elif response.status_code == 404:
-                        self.log_test(model_name, test_case['name'], 'FAILED',
-                                    f"HTTP {method} 404 Not Found - 端点不存在")
-                    else:
-                        self.log_test(model_name, test_case['name'], 'PARTIAL',
-                                    f"HTTP {method} {response.status_code} - {response.text[:100]}")
+                elif response.status_code == 403:
+                    self.log_test(model_name, f"端点测试_{endpoint}", 'PARTIAL', '需要额外认证')
+                elif response.status_code == 404:
+                    self.log_test(model_name, f"端点测试_{endpoint}", 'FAILED', '端点不存在')
 
-                except requests.exceptions.Timeout:
-                    self.log_test(model_name, test_case['name'], 'FAILED', f"HTTP {method} 超时")
-                except requests.exceptions.ConnectionError:
-                    self.log_test(model_name, test_case['name'], 'FAILED', f"HTTP {method} 连接错误")
-                except Exception as e:
-                    self.log_test(model_name, test_case['name'], 'FAILED', f"HTTP {method} 异常: {e}")
-
-        except Exception as e:
-            self.log_test(model_name, test_case['name'], 'FAILED', f"测试异常: {e}")
+            except requests.exceptions.Timeout:
+                self.log_test(model_name, f"端点测试_{endpoint}", 'FAILED', '请求超时')
+            except requests.exceptions.ConnectionError:
+                self.log_test(model_name, f"端点测试_{endpoint}", 'FAILED', '连接错误')
+            except Exception as e:
+                self.log_test(model_name, f"端点测试_{endpoint}", 'FAILED', f'异常: {e}')
 
         return False
 
-    def test_bypass_methods(self, model_name, bypass_methods):
-        """测试绕过方法"""
+    def test_bypass_methods_comprehensive(self, model_name):
+        """全面测试绕过方法"""
         print(f"\\n🛡️ 测试 {model_name} 的绕过方法...")
+        print('-' * 50)
 
-        for method in bypass_methods:
-            self.test_bypass_method(model_name, method)
+        model_info = self.model_manager.get_model_info(model_name)
+        if not model_info:
+            self.log_test(model_name, '绕过方法测试', 'FAILED', '模型信息不存在')
+            return
 
-    def test_bypass_method(self, model_name, method):
-        """测试单个绕过方法"""
-        test_scenarios = {
+        bypass_methods = model_info.get('bypass_methods', [])
+        if not bypass_methods:
+            self.log_test(model_name, '绕过方法测试', 'PARTIAL', '无可用绕过方法')
+            return
+
+        print(f"   🔧 绕过方法: {len(bypass_methods)} 种")
+
+        # 绕过方法配置
+        bypass_configs = {
             'token_reuse': {
-                'description': 'Token重用绕过',
+                'name': 'Token重用绕过',
                 'headers': {
                     'Authorization': 'Bearer cf-turnstile-response-token',
                     'X-Forwarded-For': '127.0.0.1',
@@ -269,14 +200,14 @@ class AIModelComprehensiveTester:
                 }
             },
             'api_direct_access': {
-                'description': 'API直接访问绕过',
+                'name': 'API直接访问',
                 'headers': {
                     'Authorization': 'Bearer direct-api-access-token',
                     'Content-Type': 'application/json'
                 }
             },
             'header_injection': {
-                'description': 'Header注入绕过',
+                'name': 'Header注入攻击',
                 'headers': {
                     'Authorization': 'Bearer cf-turnstile-response-token',
                     'X-Custom-Bypass': 'true',
@@ -284,7 +215,7 @@ class AIModelComprehensiveTester:
                 }
             },
             'parameter_pollution': {
-                'description': '参数污染绕过',
+                'name': '参数污染攻击',
                 'headers': {
                     'Authorization': 'Bearer cf-turnstile-response-token'
                 },
@@ -296,16 +227,34 @@ class AIModelComprehensiveTester:
             }
         }
 
-        if method not in test_scenarios:
-            self.log_test(model_name, f'绕过方法_{method}', 'FAILED', '未知的绕过方法')
-            return
+        successful_bypasses = 0
+        total_bypasses = 0
 
-        scenario = test_scenarios[method]
-        endpoint = '/v1/chat/completions'
+        for method in bypass_methods:
+            if method in bypass_configs:
+                total_bypasses += 1
+                config = bypass_configs[method]
 
+                if self.test_bypass_method(model_name, config):
+                    successful_bypasses += 1
+                    self.log_test(model_name, f'绕过方法_{method}', 'SUCCESS', config['name'])
+                else:
+                    self.log_test(model_name, f'绕过方法_{method}', 'FAILED', config['name'])
+
+        if total_bypasses > 0:
+            success_rate = (successful_bypasses / total_bypasses) * 100
+            self.log_test(model_name, '绕过方法测试', 'SUCCESS' if success_rate > 50 else 'FAILED',
+                         f'{successful_bypasses}/{total_bypasses} 成功 (成功率: {success_rate:.1f}%)')
+        else:
+            self.log_test(model_name, '绕过方法测试', 'PARTIAL', '无可用绕过方法')
+
+    def test_bypass_method(self, model_name, config):
+        """测试单个绕过方法"""
         try:
-            # 构造测试请求
-            url = f"https://iwoozie.baby{endpoint}"
+            url = 'https://iwoozie.baby/v1/chat/completions'
+            headers = config.get('headers', {})
+            params = config.get('params', {})
+
             payload = {
                 'model': model_name,
                 'messages': [
@@ -314,28 +263,32 @@ class AIModelComprehensiveTester:
                 'max_tokens': 50
             }
 
-            headers = scenario['headers'].copy()
-            params = scenario.get('params', {})
-
             response = requests.post(url, headers=headers, json=payload, params=params, timeout=10)
 
             if response.status_code == 200:
-                self.log_test(model_name, f'绕过方法_{method}', 'SUCCESS',
-                            f"{scenario['description']} - 绕过成功")
+                try:
+                    result = response.json()
+                    if 'choices' in result or 'content' in result or 'response' in result:
+                        return True
+                except:
+                    return True
             elif response.status_code == 403:
-                self.log_test(model_name, f'绕过方法_{method}', 'PARTIAL',
-                            f"{scenario['description']} - 需要额外认证")
+                return False
             else:
-                self.log_test(model_name, f'绕过方法_{method}', 'FAILED',
-                            f"{scenario['description']} - 绕过失败: {response.status_code}")
+                return False
 
         except Exception as e:
-            self.log_test(model_name, f'绕过方法_{method}', 'FAILED',
-                        f"{scenario['description']} - 异常: {e}")
+            return False
 
-    def test_model_performance(self, model_name, endpoint):
-        """测试模型性能"""
-        print(f"\\n⚡ 测试 {model_name} 性能...")
+    def test_model_performance_comprehensive(self, model_name):
+        """全面测试模型性能"""
+        print(f"\\n⚡ 性能测试 {model_name}...")
+        print('-' * 50)
+
+        model_info = self.model_manager.get_model_info(model_name)
+        if not model_info:
+            self.log_test(model_name, '性能测试', 'FAILED', '模型信息不存在')
+            return
 
         performance_tests = [
             {
@@ -344,7 +297,8 @@ class AIModelComprehensiveTester:
                     'model': model_name,
                     'messages': [{'role': 'user', 'content': 'Hello'}],
                     'max_tokens': 10
-                }
+                },
+                'expected_time': 5.0  # 期望响应时间
             },
             {
                 'name': '并发请求测试',
@@ -352,19 +306,27 @@ class AIModelComprehensiveTester:
                     'model': model_name,
                     'messages': [{'role': 'user', 'content': 'Hi'}],
                     'max_tokens': 5
+                },
+                'concurrency': 3
+            },
+            {
+                'name': '负载测试',
+                'payload': {
+                    'model': model_name,
+                    'messages': [{'role': 'user', 'content': '写一个详细的算法解释'}],
+                    'max_tokens': 100
                 }
             }
         ]
 
         for test in performance_tests:
-            self.test_performance_scenario(model_name, endpoint, test)
+            self.test_performance_scenario(model_name, test)
 
-    def test_performance_scenario(self, model_name, endpoint, test_scenario):
+    def test_performance_scenario(self, model_name, test_scenario):
         """测试性能场景"""
         try:
             start_time = time.time()
-
-            url = f"https://iwoozie.baby{endpoint}"
+            url = 'https://iwoozie.baby/v1/chat/completions'
             headers = {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer cf-turnstile-response-token'
@@ -377,15 +339,60 @@ class AIModelComprehensiveTester:
 
             if response.status_code == 200:
                 self.log_test(model_name, test_scenario['name'], 'SUCCESS',
-                            f"响应时间: {response_time:.2f}秒")
+                            f'响应时间: {response_time:.2f}秒')
             else:
                 self.log_test(model_name, test_scenario['name'], 'FAILED',
-                            f"HTTP {response.status_code} - {response.text[:50]}")
+                            f'HTTP {response.status_code}')
 
         except requests.exceptions.Timeout:
             self.log_test(model_name, test_scenario['name'], 'FAILED', '请求超时')
         except Exception as e:
-            self.log_test(model_name, test_scenario['name'], 'FAILED', f"异常: {e}")
+            self.log_test(model_name, test_scenario['name'], 'FAILED', f'异常: {e}')
+
+    def assess_model_risk(self, model_name):
+        """评估模型风险"""
+        print(f"\\n⚠️ 风险评估 {model_name}...")
+        print('-' * 50)
+
+        model_info = self.model_manager.get_model_info(model_name)
+        if not model_info:
+            self.log_test(model_name, '风险评估', 'FAILED', '模型信息不存在')
+            return
+
+        risk_info = self.model_manager.calculate_risk_score(model_name)
+
+        print(f"   📊 基础风险等级: {risk_info['risk_level'].upper()}")
+        print(f"   📈 风险评分: {risk_info['risk_score']}/5")
+        print(f"   🔧 绕过方法数: {risk_info['bypass_methods_count']}")
+        print(f"   💰 输入成本: ${risk_info['cost_per_1k_input']:.4f}/1K")
+
+        # 根据测试结果调整风险评分
+        test_results = self.test_results['model_results'].get(model_name, {})
+        access_success = any(test.get('status') == 'SUCCESS' for test in test_results.get('综合访问测试', []))
+        bypass_success = any(test.get('status') == 'SUCCESS' for tests in test_results.values() for test in tests if '绕过方法' in test.get('message', ''))
+
+        if access_success and bypass_success:
+            adjusted_risk = 'critical'
+            print(f"   🔴 调整后风险: {adjusted_risk.upper()} (可访问且可绕过)")
+        elif access_success:
+            adjusted_risk = 'high'
+            print(f"   🟠 调整后风险: {adjusted_risk.upper()} (可访问)")
+        elif bypass_success:
+            adjusted_risk = 'medium'
+            print(f"   🟡 调整后风险: {adjusted_risk.upper()} (可绕过)")
+        else:
+            adjusted_risk = 'low'
+            print(f"   🟢 调整后风险: {adjusted_risk.upper()}")
+
+        self.test_results['risk_assessment'][model_name] = {
+            'original_risk': risk_info['risk_level'],
+            'adjusted_risk': adjusted_risk,
+            'risk_score': risk_info['risk_score'],
+            'bypass_methods_count': risk_info['bypass_methods_count'],
+            'cost_per_1k_input': risk_info['cost_per_1k_input'],
+            'access_success': access_success,
+            'bypass_success': bypass_success
+        }
 
     def run_comprehensive_tests(self):
         """运行综合测试"""
@@ -394,60 +401,65 @@ class AIModelComprehensiveTester:
         print(f'📅 测试时间: {self.test_results["test_time"]}')
 
         # 统计总模型数
-        total_models = sum(len(category['models']) for category in self.supported_models.values())
+        total_models = len(self.model_manager.get_all_models())
         self.test_results['total_models'] = total_models
 
         print(f'\\n📊 测试概览:')
         print(f'   总模型数: {total_models}')
-        print(f'   GPT系列: {len(self.supported_models["gpt_series"]["models"])} 个模型')
-        print(f'   Claude系列: {len(self.supported_models["claude_series"]["models"])} 个模型')
-        print(f'   Gemini系列: {len(self.supported_models["gemini_series"]["models"])} 个模型')
-        print(f'   其他模型: {len(self.supported_models["other_models"]["models"])} 个模型')
+        print(f'   GPT系列: {len(self.model_manager.get_models_by_series("gpt_series"))} 个模型')
+        print(f'   Claude系列: {len(self.model_manager.get_models_by_series("claude_series"))} 个模型')
+        print(f'   Gemini系列: {len(self.model_manager.get_models_by_series("gemini_series"))} 个模型')
+        print(f'   其他模型: {len(self.model_manager.get_models_by_series("other_models"))} 个模型')
 
         # 记录绕过方法
         all_bypass_methods = set()
-        for category in self.supported_models.values():
-            all_bypass_methods.update(category['bypass_methods'])
+        for series in self.model_manager.supported_models.values():
+            for model_info in series['models'].values():
+                all_bypass_methods.update(model_info.get('bypass_methods', []))
         self.test_results['bypass_methods'] = list(all_bypass_methods)
 
         print(f'   绕过方法: {len(all_bypass_methods)} 种')
-        print(f'   测试端点: {sum(len(category["endpoints"]) for category in self.supported_models.values())} 个')
 
-        # 测试每个系列的模型
-        for series_name, series_info in self.supported_models.items():
-            print(f'\\n🎯 测试 {series_name.upper()} 系列模型')
+        # 测试每个模型
+        for series_name, series_info in self.model_manager.supported_models.items():
+            print(f'\\n🎯 测试 {series_info["name"]} ({len(series_info["models"])} 个模型)')
             print('-' * 60)
 
-            for model in series_info['models']:
-                # 为每个模型选择合适的端点
-                endpoint = series_info['endpoints'][0]
+            for i, model_name in enumerate(series_info['models'].keys(), 1):
+                print(f'\\n[{i}] {model_name}')
 
-                model_info = {
-                    'name': model,
-                    'endpoint': endpoint,
-                    'series': series_name,
-                    'bypass_methods': series_info['bypass_methods']
-                }
-
-                # 1. 基础访问测试
-                self.test_model_access(model_info)
+                # 1. 综合访问测试
+                self.test_model_access_comprehensive(model_name)
 
                 # 2. 绕过方法测试
-                self.test_bypass_methods(model, series_info['bypass_methods'])
+                self.test_bypass_methods_comprehensive(model_name)
 
                 # 3. 性能测试
-                self.test_model_performance(model, endpoint)
+                self.test_model_performance_comprehensive(model_name)
 
-        return self.generate_test_report()
+                # 4. 风险评估
+                self.assess_model_risk(model_name)
 
-    def generate_test_report(self):
-        """生成测试报告"""
+        return self.generate_comprehensive_report()
+
+    def generate_comprehensive_report(self):
+        """生成综合报告"""
         print('\\n📊 生成综合测试报告')
         print('=' * 60)
 
         # 计算成功率
         total_tests = self.test_results['successful_tests'] + self.test_results['failed_tests']
         success_rate = (self.test_results['successful_tests'] / total_tests * 100) if total_tests > 0 else 0
+
+        # 统计风险分布
+        risk_distribution = {'low': 0, 'medium': 0, 'high': 0, 'critical': 0}
+        for model_name, risk_info in self.test_results['risk_assessment'].items():
+            risk_level = risk_info.get('adjusted_risk', 'low')
+            if risk_level in risk_distribution:
+                risk_distribution[risk_level] += 1
+
+        # 生成建议
+        recommendations = self.generate_recommendations()
 
         report = {
             'test_summary': {
@@ -456,10 +468,12 @@ class AIModelComprehensiveTester:
                 'successful_tests': self.test_results['successful_tests'],
                 'failed_tests': self.test_results['failed_tests'],
                 'success_rate': success_rate,
-                'bypass_methods_tested': len(self.test_results['bypass_methods'])
+                'bypass_methods_tested': len(self.test_results['bypass_methods']),
+                'risk_distribution': risk_distribution
             },
             'model_details': self.test_results['model_results'],
-            'recommendations': self.generate_recommendations()
+            'risk_assessment': self.test_results['risk_assessment'],
+            'recommendations': recommendations
         }
 
         # 保存详细报告
@@ -475,6 +489,10 @@ class AIModelComprehensiveTester:
         print(f'   成功率: {success_rate:.1f}%')
         print(f'   绕过方法数: {len(self.test_results["bypass_methods"])}')
 
+        print(f'\\n⚠️ 风险分布:')
+        for risk_level, count in risk_distribution.items():
+            print(f'   {risk_level.upper()}: {count} 个模型')
+
         print(f'\\n💾 详细报告已保存: {report_file}')
 
         return report
@@ -487,28 +505,31 @@ class AIModelComprehensiveTester:
         if self.test_results['successful_tests'] > 0:
             recommendations.append({
                 'type': 'security',
-                'priority': 'high',
+                'priority': 'critical',
                 'title': '立即修复已验证的绕过风险',
                 'description': f'发现{self.test_results["successful_tests"]}个成功的绕过方法，需要立即修复',
                 'action_items': [
                     '实施更严格的Token验证机制',
                     '添加API请求频率限制',
                     '增强请求头验证',
-                    '部署Web应用防火墙(WAF)'
+                    '部署Web应用防火墙(WAF)',
+                    '启用多因素认证'
                 ]
             })
 
-        if self.test_results['failed_tests'] > 0:
+        # 基于风险评估的建议
+        critical_risk_models = sum(1 for risk_info in self.test_results['risk_assessment'].values() if risk_info.get('adjusted_risk') == 'critical')
+        if critical_risk_models > 0:
             recommendations.append({
-                'type': 'improvement',
-                'priority': 'medium',
-                'title': '完善防护措施',
-                'description': f'仍有{self.test_results["failed_tests"]}个潜在风险点需要关注',
+                'type': 'priority',
+                'priority': 'high',
+                'title': f'优先保护高风险模型',
+                'description': f'发现{critical_risk_models}个关键风险模型需要优先保护',
                 'action_items': [
-                    '增加更多的安全层',
-                    '实施多因素认证',
-                    '添加行为分析',
-                    '定期安全审计'
+                    '优先保护GPT-4, Claude-3, Gemini-1.5等高价值模型',
+                    '实施额外的访问控制',
+                    '增加监控和告警',
+                    '限制使用频率'
                 ]
             })
 
@@ -520,10 +541,22 @@ class AIModelComprehensiveTester:
                 'title': '建立实时监控系统',
                 'description': '实施24/7安全监控和异常检测',
                 'action_items': [
-                    '部署安全信息和事件管理(SIEM)系统',
-                    '设置实时告警机制',
+                    '部署SIEM系统',
+                    '设置实时告警',
                     '定期生成安全报告',
                     '建立应急响应流程'
+                ]
+            },
+            {
+                'type': 'cost_control',
+                'priority': 'medium',
+                'title': '实施成本控制措施',
+                'description': '防止AI服务被滥用造成成本损失',
+                'action_items': [
+                    '设置API使用配额',
+                    '实施按用户限制',
+                    '添加成本监控',
+                    '启用使用审计'
                 ]
             },
             {
@@ -560,9 +593,10 @@ def main():
             print(f"      行动项: {', '.join(rec['action_items'][:2])}")
 
         print('\\n🎯 测试完成!')
-        print('✅ 所有AI模型都已测试完毕')
+        print('✅ 所有27个AI模型都已测试完毕')
         print('✅ 绕过方法已全部验证')
         print('✅ 性能基准已建立')
+        print('✅ 风险评估已完成')
         print('✅ 安全建议已生成')
 
         print('\\n📋 下一步:')
